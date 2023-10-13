@@ -41,7 +41,8 @@ If a process starts to execute code to enter the critical section, it must print
 
 The code for each child process should use the following template:
 
-`for (i = 0; i < 5; i++) 
+```
+for (i = 0; i < 5; i++) 
 {
   wait for semaphore;
   sleep for random amount of time (between 1 and 3 seconds);
@@ -49,7 +50,7 @@ The code for each child process should use the following template:
   sleep for random amount of time (between 1 and 3 seconds);
   signal on semaphore;
 }
-`
+```
 
 Unlike last project, you do not have to specify the number of processes that participate in the critical section. However, you should keep the number of processes that can be forked concurrently under 20. The number of processes actually forked will come from the number specified on command line when you start the program. This implies that the **master** will stop forking processes as the limit is reached and will fork more only after some previously forked process terminates.
 
