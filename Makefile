@@ -3,11 +3,11 @@ CFLAGS = -Wall
 
 all: master slave
 
-master: master.c
-	$(CC) $(CFLAGS) master.c -o master
+.SUFFIXES: .c .o
 
-slave: slave.c
-	$(CC) $(CFLAGS) slave.c -o slave
+.c:
+	$(CC) $(CFLAGS) $< -o $@
 
 clean:
 	rm -f master slave logfile.* cstest
+

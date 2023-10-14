@@ -1,5 +1,10 @@
 # 4760-semaphores_message_passing
 
+# TO RUN
+1. Make sure no straggling files by first typing 'make clean'
+2. Type 'make' to create executables
+3. Use command './master -t ss n' to run program, where ss is timeout and n is number of processes 1-20 (note: if you enter a number higher than 20 the program will still only create 20 processes)
+4. Use 'make clean' to delete executables, logfiles, and cstest
 ## Purpose
 
 The goal of this program is to become familiar with semaphores in Linux. It is a repetition of your last project with the part that was handled by the concurrency algorithm to be implemented by semaphores.

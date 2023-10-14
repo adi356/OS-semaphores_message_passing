@@ -23,6 +23,7 @@
         "*.rex": "rexx",
         "*.rexx": "rexx",
         "types.h": "c",
-        "sem.h": "c"
+        "sem.h": "c",
+        "time.h": "c"
     }
 }

@@ -13,6 +13,9 @@
 struct sembuf sem_wait = {0, -1, 0}; // Decrement the semaphore
 struct sembuf sem_signal = {0, 1, 0}; // Increment the semaphore
 
+int sem_id; 
+int shm_id;
+
 struct SharedData {
     int turn;
     int inCritical;

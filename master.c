@@ -15,6 +15,10 @@
 struct sembuf sem_wait = {0, -1, 0}; // Decrement the semaphore
 struct sembuf sem_signal = {0, 1, 0}; // Increment the semaphore
 
+int sem_id; 
+int shm_id;
+
+pid_t child_pids[MAX_PROCESSES];
 
 struct SharedData {
     int turn;
@@ -28,12 +32,17 @@ void terminationFunc(int signo) {
 
     // Terminate child processes
     for (int i = 0; i < MAX_PROCESSES; ++i) {
-        kill(0, SIGTERM);
+       // kill(0, SIGTERM);
+       kill(child_pids[i], SIGTERM);
     }
 
     // Wait for child processes to terminate
+    // int status;
+    // while (wait(&status) > 0);
     int status;
-    while (wait(&status) > 0);
+    for (int i = 0; i < MAX_PROCESSES; ++i) {
+        waitpid(child_pids[i], &status, 0);
+    }
 
     // Deallocate semaphore
     semctl(sem_id, 0, IPC_RMID);
@@ -50,20 +59,24 @@ void terminationFunc(int signo) {
     exit(EXIT_SUCCESS);
 }
 
+void timeoutHandler(int signo) {
+    printf("Timeout reached. Terminating processes\n");
+    terminationFunc(signo);
+}
+
 int main(int argc, char* argv[]) {
     // Signal handlers
     signal(SIGTERM, terminationFunc);
     signal(SIGINT, terminationFunc);
+    signal(SIGALRM, timeoutHandler);
 
-    //original
-    // int timeout = (argc > 1) ? atoi(argv[1]) : DEFAULT_TIMEOUT;
-    // int numProcesses = (argc > 2) ? atoi(argv[2]) : MAX_PROCESSES;
-    // numProcesses = (numProcesses > MAX_PROCESSES) ? MAX_PROCESSES : numProcesses;
-
-    //new 
+    //updated code for command line 
     int timeout = (argc > 2) ? atoi(argv[2]) : DEFAULT_TIMEOUT;
     int numProcesses = (argc > 3) ? atoi(argv[3]) : MAX_PROCESSES;
     numProcesses = (numProcesses > MAX_PROCESSES) ? MAX_PROCESSES : numProcesses;
+
+    //set timeout alarm
+    alarm(timeout);
 
     // Create semaphore
     sem_id = semget(ftok("semaphore_key", 1), 1, IPC_CREAT | 0666);
@@ -95,18 +108,21 @@ int main(int argc, char* argv[]) {
             char processNumberStr[5];
             snprintf(processNumberStr, sizeof(processNumberStr), "%d", i + 1);
             execlp("./slave", "slave", processNumberStr, NULL);
-            perror("execlp");
+            perror("master: Error: execlp command not working properly");
             exit(EXIT_FAILURE);
         } else if (pid < 0) {
-            perror("fork");
+            perror("master: Error: did not fork properly");
             exit(EXIT_FAILURE);
+        } else {
+            child_pids[i] = pid; //storing child PID in array
         }
     }
 
-    // Loop to wait for child processes to terminate
+    
     int status;
     for (int i = 0; i < numProcesses; ++i) {
-        wait(&status);
+        //wait(&status);
+        waitpid(child_pids[i], &status, 0);
     }
 
     // Deallocate semaphore and shared memory
