@@ -1,13 +1,3 @@
-/**
- * @file master.c
- * @author Andrew Irvine (adi356@umsystem.edu)
- * @brief 
- * @version 0.1
- * @date 2023-09-27
- * 
- * @copyright Copyright (c) 2023
- * 
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,10 +9,14 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <math.h>
+#include <sys/sem.h>
 #include "config.h"
 
+struct sembuf sem_wait = {0, -1, 0}; // Decrement the semaphore
+struct sembuf sem_signal = {0, 1, 0}; // Increment the semaphore
+
+
 struct SharedData {
-    //turn variable to make sure each process has a unique turn
     int turn;
     int inCritical;
 };
@@ -32,11 +26,23 @@ struct SharedData* sharedData;
 void terminationFunc(int signo) {
     printf("Received termination signal. Cleaning up processes\n");
 
-    //deallocate shared memory
+    // Terminate child processes
+    for (int i = 0; i < MAX_PROCESSES; ++i) {
+        kill(0, SIGTERM);
+    }
+
+    // Wait for child processes to terminate
+    int status;
+    while (wait(&status) > 0);
+
+    // Deallocate semaphore
+    semctl(sem_id, 0, IPC_RMID);
+
+    // Deallocate shared memory
     shmdt(sharedData);
-    shmctl(shmget(ftok("shared_memory_key", 1), sizeof(struct SharedData) * MAX_PROCESSES, IPC_CREAT | 0666), IPC_RMID, NULL);
-    
-    //print termination time
+    shmctl(shm_id, IPC_RMID, NULL);
+
+    // Print termination time
     time_t t;
     time(&t);
     printf("Terminated at: %s", ctime(&t));
@@ -45,74 +51,66 @@ void terminationFunc(int signo) {
 }
 
 int main(int argc, char* argv[]) {
-  
-    //signal handlers
+    // Signal handlers
     signal(SIGTERM, terminationFunc);
     signal(SIGINT, terminationFunc);
 
-    //timeout logic
-    int timeout = atoi(argv[1]);
-    int numProcesses = atoi(argv[2]);
+    //original
+    // int timeout = (argc > 1) ? atoi(argv[1]) : DEFAULT_TIMEOUT;
+    // int numProcesses = (argc > 2) ? atoi(argv[2]) : MAX_PROCESSES;
+    // numProcesses = (numProcesses > MAX_PROCESSES) ? MAX_PROCESSES : numProcesses;
 
+    //new 
+    int timeout = (argc > 2) ? atoi(argv[2]) : DEFAULT_TIMEOUT;
+    int numProcesses = (argc > 3) ? atoi(argv[3]) : MAX_PROCESSES;
     numProcesses = (numProcesses > MAX_PROCESSES) ? MAX_PROCESSES : numProcesses;
 
-    //allocate shared memory and initialize
-    key_t key = ftok("shared_memory_key", 1);
-    int shmid = shmget(key, sizeof(struct SharedData) * MAX_PROCESSES, IPC_CREAT | 0666);
-    sharedData = (struct SharedData*)shmat(shmid, NULL, 0);
+    // Create semaphore
+    sem_id = semget(ftok("semaphore_key", 1), 1, IPC_CREAT | 0666);
+    if (sem_id == -1) {
+        perror("master: Error creating semaphore");
+        exit(EXIT_FAILURE);
+    } else {
+        printf("Semaphore created successfully. ID: %d\n", sem_id);
+    }
 
-    //initialize shared memory data for each process
+    // Initialize semaphore value to numProcesses
+    semctl(sem_id, 0, SETVAL, numProcesses);
+
+    // Allocate shared memory and initialize
+    key_t key = ftok("shared_memory_key", 1);
+    shm_id = shmget(key, sizeof(struct SharedData) * MAX_PROCESSES, IPC_CREAT | 0666);
+    sharedData = (struct SharedData*)shmat(shm_id, NULL, 0);
+
+    // Initialize shared memory data for each process
     for (int i = 0; i < numProcesses; ++i) {
         sharedData[i].turn = i;
         sharedData[i].inCritical = 0;
     }
 
-    //added to see if pid[i] would work better than pid_t
-    // pid_t pid[MAX_PROCESSES];
-
-    //create the multiple child processes using fork
-    for (int i = 0; i < numProcesses; ++i) {
+    // Create the multiple child processes using fork
+    for (int i = 0; i < numProcesses && i < MAX_PROCESSES; ++i) {
         pid_t pid = fork();
-        //pid[i] = fork();
         if (pid == 0) {
             char processNumberStr[5];
             snprintf(processNumberStr, sizeof(processNumberStr), "%d", i + 1);
-           execlp("./slave", "slave", processNumberStr, NULL);
-           //TODO: write more descriptive error
-           perror("execlp");
-           exit(EXIT_FAILURE);
+            execlp("./slave", "slave", processNumberStr, NULL);
+            perror("execlp");
+            exit(EXIT_FAILURE);
         } else if (pid < 0) {
-            //TODO: write more descriptive error
             perror("fork");
             exit(EXIT_FAILURE);
         }
     }
 
-    sleep(timeout);
-
-    //added to test new method for this loop
-    
-    //terminate child processes
-    //should have been inside termination function along with kill operation below
+    // Loop to wait for child processes to terminate
+    int status;
     for (int i = 0; i < numProcesses; ++i) {
-        kill(0, SIGTERM);
-        //usleep(5000); //delay between signals to each child process
+        wait(&status);
     }
 
-    //wait for child processes to terminate
-    //this should be above the for loop killing child processes and also inside termination function
-    int status;
-    while (wait(&status) > 0);
-
-    //deallocate shared memory
-    shmdt(sharedData);
-    shmctl(shmget(key, sizeof(struct SharedData) * MAX_PROCESSES, IPC_CREAT | 0666), IPC_RMID, NULL);
-    //shmctl(shmid, IPC_RMID, NULL);
-
-    //print time
-    time_t t;
-    time(&t);
-    printf("Terminated at: %s\n", ctime(&t));
+    // Deallocate semaphore and shared memory
+    terminationFunc(0);
 
     return 0;
 }
