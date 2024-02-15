@@ -1,4 +1,4 @@
-# 4760-semaphores_message_passing
+# OS-semaphores_message_passing
 
 # TO RUN
 1. Make sure no straggling files by first typing 'make clean'
